@@ -24,7 +24,7 @@ jobs:
         run: kicad-cli version
       - name: Reconstruct and verify byte-exact source bundle
         run: |
-          cat electronics/src_chunks/part*.bin > electronics/dpd_kicad_src.rebuilt.tar.gz
+          cat electronics/src_chunks/part000.bin electronics/src_chunks/part001a.bin electronics/src_chunks/part001b.bin electronics/src_chunks/part002.bin electronics/src_chunks/part003.bin electronics/src_chunks/part004.bin electronics/src_chunks/part005.bin > electronics/dpd_kicad_src.rebuilt.tar.gz
           echo '166212301f4671d9662ae3038baa10a2bd0d43c5acd8b3fe1a68ec6717d2652d  electronics/dpd_kicad_src.rebuilt.tar.gz' | sha256sum -c -
           mkdir -p electronics/DPD2000_RevC
           tar -xzf electronics/dpd_kicad_src.rebuilt.tar.gz -C electronics/DPD2000_RevC
@@ -75,7 +75,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Reconstruct and verify byte-exact source bundle
         run: |
-          cat electronics/src_chunks/part*.bin > electronics/dpd_kicad_src.rebuilt.tar.gz
+          cat electronics/src_chunks/part000.bin electronics/src_chunks/part001a.bin electronics/src_chunks/part001b.bin electronics/src_chunks/part002.bin electronics/src_chunks/part003.bin electronics/src_chunks/part004.bin electronics/src_chunks/part005.bin > electronics/dpd_kicad_src.rebuilt.tar.gz
           echo '166212301f4671d9662ae3038baa10a2bd0d43c5acd8b3fe1a68ec6717d2652d  electronics/dpd_kicad_src.rebuilt.tar.gz' | sha256sum -c -
           mkdir -p electronics/DPD2000_RevC
           tar -xzf electronics/dpd_kicad_src.rebuilt.tar.gz -C electronics/DPD2000_RevC
