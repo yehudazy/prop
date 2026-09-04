@@ -1,0 +1,64 @@
+* DPD2000 Rev-C -- corrected 4-stage Cockcroft-Walton ngspice proof
+* Rosen piezo secondary represented as a 250.5 Vpk, 130 kHz sinusoidal source.
+* For a conventional 4-stage half-wave CW, ideal no-load Vout ~= 8*Vpk ~= 2004 V.
+* Real standing loads are included below.
+VPT src 0 SIN(0 250.5 130k)
+RPT src ac 2k
+.model DHV D(Is=1p Rs=20 N=1.6 Cjo=2p Tt=100n)
+
+* 4-stage Cockcroft-Walton ladder: 8 diodes + 8 capacitors.
+D1 0 n1 DHV
+C1 ac n1 10n
+RLC1 ac n1 10G
+D2 n1 n2 DHV
+C2 0 n2 10n
+RLC2 0 n2 10G
+D3 n2 n3 DHV
+C3 n1 n3 10n
+RLC3 n1 n3 10G
+D4 n3 n4 DHV
+C4 n2 n4 10n
+RLC4 n2 n4 10G
+D5 n4 n5 DHV
+C5 n3 n5 10n
+RLC5 n3 n5 10G
+D6 n5 n6 DHV
+C6 n4 n6 10n
+RLC6 n4 n6 10G
+D7 n6 n7 DHV
+C7 n5 n7 10n
+RLC7 n5 n7 10G
+D8 n7 raw DHV
+C8 n6 raw 10n
+RLC8 n6 raw 10G
+
+* Output filter and permanent load.
+RF1 raw f1 1Meg
+CF1 f1 0 2.2n
+RF2 f1 hvbus 1Meg
+CF2 hvbus 0 2.2n
+RBLEED hvbus 0 100Meg
+RSENSE hvbus 0 1001Meg
+
+* Independent detector bias filters; bypass capacitors are before final bias resistors.
+RFA hvbus biasA 1Meg
+CFA biasA 0 4.7n
+RBA biasA detA 9.96Meg
+RLEAKA detA 0 100G
+RFB hvbus biasB 1Meg
+CFB biasB 0 4.7n
+RBB biasB detB 9.96Meg
+RLEAKB detB 0 100G
+
+.option reltol=1e-4 abstol=1p vntol=1u method=gear
+.tran 1u 100m startup
+.meas tran N2_AVG AVG V(n2) FROM=90m TO=100m
+.meas tran N4_AVG AVG V(n4) FROM=90m TO=100m
+.meas tran N6_AVG AVG V(n6) FROM=90m TO=100m
+.meas tran RAW_AVG AVG V(raw) FROM=90m TO=100m
+.meas tran HV_AVG AVG V(hvbus) FROM=90m TO=100m
+.meas tran HV_MAX MAX V(hvbus) FROM=90m TO=100m
+.meas tran HV_MIN MIN V(hvbus) FROM=90m TO=100m
+.meas tran DETA_AVG AVG V(detA) FROM=90m TO=100m
+.meas tran DETB_AVG AVG V(detB) FROM=90m TO=100m
+.end
