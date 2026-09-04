@@ -6,11 +6,6 @@ on:
     paths:
       - 'electronics/**'
       - '.github/workflows/dpd2000-kicad.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'electronics/**'
-      - '.github/workflows/dpd2000-kicad.yml'
   workflow_dispatch:
 
 jobs:
@@ -19,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Reconstruct and verify byte-exact source bundle
+      - name: Reconstruct source bundle
         run: |
           cat electronics/src_chunks/part000.bin electronics/src_chunks/part001a.bin electronics/src_chunks/part001b.bin electronics/src_chunks/part002.bin electronics/src_chunks/part003.bin electronics/src_chunks/part004.bin electronics/src_chunks/part005.bin > electronics/dpd_kicad_src.rebuilt.tar.gz
           echo '166212301f4671d9662ae3038baa10a2bd0d43c5acd8b3fe1a68ec6717d2652d  electronics/dpd_kicad_src.rebuilt.tar.gz' | sha256sum -c -
@@ -28,75 +23,89 @@ jobs:
           tar -xzf electronics/dpd_kicad_src.rebuilt.tar.gz -C electronics/DPD2000_RevC
           cp electronics/overrides/hv_pt_cw.cir electronics/DPD2000_RevC/sim/hv_pt_cw.cir
           cp electronics/overrides/afe_tot.cir electronics/DPD2000_RevC/sim/afe_tot.cir
-          find electronics/DPD2000_RevC -maxdepth 3 -type f -print
 
-      - name: Pull real KiCad CLI image
+      - name: Pull KiCad 10.0.5
         run: docker pull kicad/kicad:10.0.5
 
-      - name: KiCad version
+      - name: Upgrade all legacy schematics to native KiCad
         run: |
-          docker run --rm --entrypoint kicad-cli kicad/kicad:10.0.5 version
+          set -x
+          for f in 01_HV.sch 02_AFE_A.sch 03_AFE_B.sch 04_MCU.sch 05_POWER.sch; do
+            docker run --rm -v "$GITHUB_WORKSPACE:/work" -w /work --entrypoint kicad-cli kicad/kicad:10.0.5 \
+              sch upgrade electronics/DPD2000_RevC/kicad/$f
+          done
+          sed -i 's/01_HV\.sch/01_HV.kicad_sch/g; s/02_AFE_A\.sch/02_AFE_A.kicad_sch/g; s/03_AFE_B\.sch/03_AFE_B.kicad_sch/g; s/04_MCU\.sch/04_MCU.kicad_sch/g; s/05_POWER\.sch/05_POWER.kicad_sch/g' electronics/DPD2000_RevC/kicad/DPD2000_RevC.sch
+          docker run --rm -v "$GITHUB_WORKSPACE:/work" -w /work --entrypoint kicad-cli kicad/kicad:10.0.5 \
+            sch upgrade electronics/DPD2000_RevC/kicad/DPD2000_RevC.sch
+          find electronics/DPD2000_RevC/kicad -maxdepth 1 -type f -printf '%f\n' | sort
 
       - name: Schematic ERC
         run: |
           mkdir -p electronics/DPD2000_RevC/manufacturing/reports
+          ROOT=electronics/DPD2000_RevC/kicad/DPD2000_RevC.kicad_sch
+          test -f "$ROOT"
           set +e
-          docker run --rm \
-            -v "$GITHUB_WORKSPACE:/work" -w /work \
-            --entrypoint kicad-cli kicad/kicad:10.0.5 \
+          docker run --rm -v "$GITHUB_WORKSPACE:/work" -w /work --entrypoint kicad-cli kicad/kicad:10.0.5 \
             sch erc --format json --severity-all --exit-code-violations \
-            -o electronics/DPD2000_RevC/manufacturing/reports/erc.json \
-            electronics/DPD2000_RevC/kicad/DPD2000_RevC.sch
-          echo $? > electronics/DPD2000_RevC/manufacturing/reports/erc.exit
+            -o electronics/DPD2000_RevC/manufacturing/reports/erc.json "$ROOT"
+          RC=$?
+          echo $RC > electronics/DPD2000_RevC/manufacturing/reports/erc.exit
+          chmod -R a+rwx electronics/DPD2000_RevC/manufacturing || true
+          echo "ERC exit=$RC"
+          test -f electronics/DPD2000_RevC/manufacturing/reports/erc.json && head -c 12000 electronics/DPD2000_RevC/manufacturing/reports/erc.json || true
           exit 0
 
       - name: PCB DRC and schematic parity
         run: |
           set +e
-          docker run --rm \
-            -v "$GITHUB_WORKSPACE:/work" -w /work \
-            --entrypoint kicad-cli kicad/kicad:10.0.5 \
+          docker run --rm -v "$GITHUB_WORKSPACE:/work" -w /work --entrypoint kicad-cli kicad/kicad:10.0.5 \
             pcb drc --format json --severity-all --exit-code-violations \
             --all-track-errors --refill-zones --schematic-parity \
             -o electronics/DPD2000_RevC/manufacturing/reports/drc.json \
             electronics/DPD2000_RevC/kicad/DPD2000_RevC.kicad_pcb
-          echo $? > electronics/DPD2000_RevC/manufacturing/reports/drc.exit
+          RC=$?
+          echo $RC > electronics/DPD2000_RevC/manufacturing/reports/drc.exit
+          chmod -R a+rwx electronics/DPD2000_RevC/manufacturing || true
+          echo "DRC exit=$RC"
+          test -f electronics/DPD2000_RevC/manufacturing/reports/drc.json && head -c 12000 electronics/DPD2000_RevC/manufacturing/reports/drc.json || true
           exit 0
 
-      - name: Export diagnostic schematic PDF
+      - name: Export diagnostic schematic PNG and PDF
         if: always()
         run: |
-          mkdir -p electronics/DPD2000_RevC/manufacturing
-          docker run --rm \
-            -v "$GITHUB_WORKSPACE:/work" -w /work \
-            --entrypoint kicad-cli kicad/kicad:10.0.5 \
-            sch export pdf \
-            -o electronics/DPD2000_RevC/manufacturing/DPD2000_schematic.pdf \
-            electronics/DPD2000_RevC/kicad/DPD2000_RevC.sch || true
+          mkdir -p electronics/DPD2000_RevC/manufacturing/schematic_png
+          docker run --rm -v "$GITHUB_WORKSPACE:/work" -w /work --entrypoint kicad-cli kicad/kicad:10.0.5 \
+            sch export png --dpi 180 -o electronics/DPD2000_RevC/manufacturing/schematic_png \
+            electronics/DPD2000_RevC/kicad/DPD2000_RevC.kicad_sch || true
+          docker run --rm -v "$GITHUB_WORKSPACE:/work" -w /work --entrypoint kicad-cli kicad/kicad:10.0.5 \
+            sch export pdf -o electronics/DPD2000_RevC/manufacturing/DPD2000_schematic.pdf \
+            electronics/DPD2000_RevC/kicad/DPD2000_RevC.kicad_sch || true
+          chmod -R a+rwx electronics/DPD2000_RevC/manufacturing || true
 
-      - name: Enforce ERC and DRC gates
+      - name: Export PCB diagnostic render
+        if: always()
         run: |
-          echo "ERC exit: $(cat electronics/DPD2000_RevC/manufacturing/reports/erc.exit)"
-          echo "DRC exit: $(cat electronics/DPD2000_RevC/manufacturing/reports/drc.exit)"
-          test "$(cat electronics/DPD2000_RevC/manufacturing/reports/erc.exit)" = "0"
-          test "$(cat electronics/DPD2000_RevC/manufacturing/reports/drc.exit)" = "0"
+          docker run --rm -v "$GITHUB_WORKSPACE:/work" -w /work --entrypoint kicad-cli kicad/kicad:10.0.5 \
+            pcb render --quality basic --width 1800 --height 1100 \
+            -o electronics/DPD2000_RevC/manufacturing/pcb_render.png \
+            electronics/DPD2000_RevC/kicad/DPD2000_RevC.kicad_pcb || true
+          chmod -R a+rwx electronics/DPD2000_RevC/manufacturing || true
 
-      - name: Export fabrication package
+      - name: Export manufacturing data if gates pass
         run: |
+          ERC=$(cat electronics/DPD2000_RevC/manufacturing/reports/erc.exit)
+          DRC=$(cat electronics/DPD2000_RevC/manufacturing/reports/drc.exit)
+          echo "ERC=$ERC DRC=$DRC"
+          test "$ERC" = "0"
+          test "$DRC" = "0"
           mkdir -p electronics/DPD2000_RevC/manufacturing/gerbers
           docker run --rm -v "$GITHUB_WORKSPACE:/work" -w /work --entrypoint kicad-cli kicad/kicad:10.0.5 \
             pcb export gerbers -o electronics/DPD2000_RevC/manufacturing/gerbers/ electronics/DPD2000_RevC/kicad/DPD2000_RevC.kicad_pcb
           docker run --rm -v "$GITHUB_WORKSPACE:/work" -w /work --entrypoint kicad-cli kicad/kicad:10.0.5 \
             pcb export drill -o electronics/DPD2000_RevC/manufacturing/gerbers/ electronics/DPD2000_RevC/kicad/DPD2000_RevC.kicad_pcb
           docker run --rm -v "$GITHUB_WORKSPACE:/work" -w /work --entrypoint kicad-cli kicad/kicad:10.0.5 \
-            pcb export pos --format csv --units mm --side both \
-            -o electronics/DPD2000_RevC/manufacturing/DPD2000_positions.csv \
-            electronics/DPD2000_RevC/kicad/DPD2000_RevC.kicad_pcb
-
-      - name: Package
-        run: |
-          cd electronics/DPD2000_RevC
-          tar -czf DPD2000_RevC_KiCad10_manufacturing.tar.gz kicad manufacturing
+            pcb export pos --format csv --units mm --side both -o electronics/DPD2000_RevC/manufacturing/DPD2000_positions.csv electronics/DPD2000_RevC/kicad/DPD2000_RevC.kicad_pcb
+          cd electronics/DPD2000_RevC && tar -czf DPD2000_RevC_KiCad10_manufacturing.tar.gz kicad manufacturing
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -112,35 +121,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Reconstruct and verify byte-exact source bundle
+      - name: Reconstruct and patch simulation decks
         run: |
           cat electronics/src_chunks/part000.bin electronics/src_chunks/part001a.bin electronics/src_chunks/part001b.bin electronics/src_chunks/part002.bin electronics/src_chunks/part003.bin electronics/src_chunks/part004.bin electronics/src_chunks/part005.bin > electronics/dpd_kicad_src.rebuilt.tar.gz
           echo '166212301f4671d9662ae3038baa10a2bd0d43c5acd8b3fe1a68ec6717d2652d  electronics/dpd_kicad_src.rebuilt.tar.gz' | sha256sum -c -
-          rm -rf electronics/DPD2000_RevC
-          mkdir -p electronics/DPD2000_RevC
+          rm -rf electronics/DPD2000_RevC && mkdir -p electronics/DPD2000_RevC
           tar -xzf electronics/dpd_kicad_src.rebuilt.tar.gz -C electronics/DPD2000_RevC
           cp electronics/overrides/hv_pt_cw.cir electronics/DPD2000_RevC/sim/hv_pt_cw.cir
           cp electronics/overrides/afe_tot.cir electronics/DPD2000_RevC/sim/afe_tot.cir
-
-      - name: Install real ngspice
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ngspice
-          ngspice --version
-
+      - name: Install ngspice
+        run: sudo apt-get update && sudo apt-get install -y ngspice
       - name: Run all SPICE decks
         run: |
           mkdir -p electronics/DPD2000_RevC/manufacturing/spice
           fail=0
           for d in hv_pt_cw.cir afe_tot.cir pt_input_resonance.cir; do
-            echo "=== $d ==="
-            ngspice -b \
-              -o "electronics/DPD2000_RevC/manufacturing/spice/${d%.cir}.log" \
-              "electronics/DPD2000_RevC/sim/$d" || fail=1
+            ngspice -b -o "electronics/DPD2000_RevC/manufacturing/spice/${d%.cir}.log" "electronics/DPD2000_RevC/sim/$d" || fail=1
           done
+          cat electronics/DPD2000_RevC/manufacturing/spice/*.log || true
           exit $fail
-
       - uses: actions/upload-artifact@v4
         if: always()
         with:
