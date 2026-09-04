@@ -6,6 +6,11 @@ on:
     paths:
       - 'electronics/**'
       - '.github/workflows/dpd2000-kicad.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'electronics/**'
+      - '.github/workflows/dpd2000-kicad.yml'
   workflow_dispatch:
 
 jobs:
@@ -28,7 +33,7 @@ jobs:
           kicad-cli pcb drc --format json --severity-all --exit-code-violations --all-track-errors --refill-zones --schematic-parity -o electronics/DPD2000_RevC/manufacturing/reports/drc.json electronics/DPD2000_RevC/kicad/DPD2000_RevC.kicad_pcb
       - name: Export fabrication package
         run: |
-          mkdir -p electronics/DPD2000_RevC/manufacturing/gerbers electronics/DPD2000_RevC/manufacturing/renders
+          mkdir -p electronics/DPD2000_RevC/manufacturing/gerbers
           kicad-cli pcb export gerbers -o electronics/DPD2000_RevC/manufacturing/gerbers/ electronics/DPD2000_RevC/kicad/DPD2000_RevC.kicad_pcb
           kicad-cli pcb export drill -o electronics/DPD2000_RevC/manufacturing/gerbers/ electronics/DPD2000_RevC/kicad/DPD2000_RevC.kicad_pcb
           kicad-cli pcb export pos --format csv --units mm --side both -o electronics/DPD2000_RevC/manufacturing/DPD2000_positions.csv electronics/DPD2000_RevC/kicad/DPD2000_RevC.kicad_pcb
