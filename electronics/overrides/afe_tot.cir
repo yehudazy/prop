@@ -1,0 +1,33 @@
+* DPD2000 Rev-C -- corrected ideal-opamp CSA + CR-(RC)^2 ToT proof
+* One 4 pC detector event is represented by a 200 uA, 20 ns current pulse.
+VVCM vcm 0 1.5
+IIN sum vcm PULSE(0 200u 10u 1n 1n 20n 100u)
+
+* Ideal charge-sensitive amplifier centered on 1.5 V.
+ECSA csa vcm vcm sum 1e6
+CF csa sum 4.7p
+RF csa sum 10Meg
+
+* Pole-zero/high-pass section: approximately 1 us pulse shaping with ~47 us CSA decay compensation.
+CHP csa hp 100p
+RPZ csa hp 487k
+RHP hp vcm 10k
+
+* Two 1 us RC integrations and x2 gain around VCM.
+RLP1 hp lp1 10k
+CLP1 lp1 vcm 100p
+EBUF buf vcm lp1 vcm 1
+RLP2 buf lp2 10k
+CLP2 lp2 vcm 100p
+EGAIN shaped vcm lp2 vcm 2
+
+* ToT is the time the shaped pulse stays above the CPU-programmable threshold.
+* Hardware uses TLV3502; this deck validates the analog transfer and threshold-crossing timing.
+.option reltol=1e-5 abstol=1p vntol=1u method=gear
+.tran 5n 45u startup
+.meas tran CSA_MAX MAX V(csa) FROM=9u TO=30u
+.meas tran SHMAX MAX V(shaped) FROM=9u TO=30u
+.meas tran T_RISE WHEN V(shaped)=1.520 RISE=1
+.meas tran T_FALL WHEN V(shaped)=1.520 FALL=1
+.meas tran TOT PARAM='T_FALL-T_RISE'
+.end
