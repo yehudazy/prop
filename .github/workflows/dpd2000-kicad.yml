@@ -23,6 +23,7 @@ jobs:
           tar -xzf electronics/dpd_kicad_src.rebuilt.tar.gz -C electronics/DPD2000_RevC
           cp electronics/overrides/hv_pt_cw.cir electronics/DPD2000_RevC/sim/hv_pt_cw.cir
           cp electronics/overrides/afe_tot.cir electronics/DPD2000_RevC/sim/afe_tot.cir
+          cp electronics/overrides/pt_input_resonance.cir electronics/DPD2000_RevC/sim/pt_input_resonance.cir
 
       - name: Pull KiCad 10.0.5
         run: docker pull kicad/kicad:10.0.5
@@ -129,6 +130,7 @@ jobs:
           tar -xzf electronics/dpd_kicad_src.rebuilt.tar.gz -C electronics/DPD2000_RevC
           cp electronics/overrides/hv_pt_cw.cir electronics/DPD2000_RevC/sim/hv_pt_cw.cir
           cp electronics/overrides/afe_tot.cir electronics/DPD2000_RevC/sim/afe_tot.cir
+          cp electronics/overrides/pt_input_resonance.cir electronics/DPD2000_RevC/sim/pt_input_resonance.cir
       - name: Install ngspice
         run: sudo apt-get update && sudo apt-get install -y ngspice
       - name: Run all SPICE decks
