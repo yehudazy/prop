@@ -1,0 +1,15 @@
+* DPD2000 Rev-C -- PT input resonance/tuning electrical check
+* This validates the resonant L-C drive network around the piezo input capacitance.
+.param LRESV=16.5u
+.param CPTV=91n
+VDRIVE in 0 AC 1
+RSRC in n1 0.5
+LRES n1 n2 {LRESV}
+CPT n2 0 {CPTV}
+RLOSS n2 0 100k
+.ac dec 400 50k 250k
+.meas ac GAIN_100K FIND vm(n2) AT=100k
+.meas ac GAIN_130K FIND vm(n2) AT=130k
+.meas ac GAIN_160K FIND vm(n2) AT=160k
+.meas ac F_ANALYTIC PARAM='1/(2*pi*sqrt(LRESV*CPTV))'
+.end

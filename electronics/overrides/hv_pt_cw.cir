@@ -1,0 +1,56 @@
+* DPD2000 Rev-C -- 4-stage (x8) Cockcroft-Walton proof
+* Rosen piezo secondary represented as 250.5 Vpk at 130 kHz.
+* Topology follows the standard x8 CW ladder; ideal no-load output ~= 8*Vpk.
+VPT src 0 SIN(0 250.5 130k)
+RPT src ac 200
+.model DHV D(Is=1p Rs=10 N=1.6 Cjo=2p Tt=100n Bv=3000 Ibv=1u)
+
+* Standard x8 ladder. Output is node raw.
+D8 0 n1 DHV
+C8 ac n1 10n
+D7 n1 n2 DHV
+C7 n2 0 10n
+D6 n2 n3 DHV
+C6 n1 n3 10n
+D5 n3 n4 DHV
+C5 n2 n4 10n
+D4 n4 n5 DHV
+C4 n3 n5 10n
+D3 n5 n6 DHV
+C3 n4 n6 10n
+D2 n6 n7 DHV
+C2 n5 n7 10n
+D1 n7 raw DHV
+C1 raw n6 10n
+
+* Output filter and permanent load.
+RF1 raw f1 1Meg
+CF1 f1 0 2.2n
+RF2 f1 hvbus 1Meg
+CF2 hvbus 0 2.2n
+RBLEED hvbus 0 100Meg
+RSENSE hvbus 0 1001Meg
+
+* Independent detector bias filters. Bypass capacitors are on the supply side
+* of the final 9.96 MOhm detector bias resistors, not directly on detector nodes.
+RFA hvbus biasA 1Meg
+CFA biasA 0 4.7n
+RBA biasA detA 9.96Meg
+RLEAKA detA 0 100G
+RFB hvbus biasB 1Meg
+CFB biasB 0 4.7n
+RBB biasB detB 9.96Meg
+RLEAKB detB 0 100G
+
+.option reltol=1e-4 abstol=1p vntol=1u method=gear
+.tran 0.5u 120m
+.meas tran N2_AVG AVG V(n2) FROM=105m TO=120m
+.meas tran N4_AVG AVG V(n4) FROM=105m TO=120m
+.meas tran N6_AVG AVG V(n6) FROM=105m TO=120m
+.meas tran RAW_AVG AVG V(raw) FROM=105m TO=120m
+.meas tran HV_AVG AVG V(hvbus) FROM=105m TO=120m
+.meas tran HV_MAX MAX V(hvbus) FROM=105m TO=120m
+.meas tran HV_MIN MIN V(hvbus) FROM=105m TO=120m
+.meas tran DETA_AVG AVG V(detA) FROM=105m TO=120m
+.meas tran DETB_AVG AVG V(detB) FROM=105m TO=120m
+.end

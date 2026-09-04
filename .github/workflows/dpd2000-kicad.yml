@@ -1,0 +1,51 @@
+name: DPD2000 KiCad manufacturing gate
+
+on:
+  push:
+    branches: [dpd2000-manufacturing]
+    paths:
+      - 'electronics/**'
+      - '.github/workflows/dpd2000-kicad.yml'
+  workflow_dispatch:
+
+jobs:
+  kicad-api-probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pull KiCad
+        run: docker pull kicad/kicad:10.0.5
+      - name: Probe Python APIs
+        run: |
+          docker run --rm --entrypoint python3 kicad/kicad:10.0.5 -c "import sys; print(sys.version); import pcbnew; print('PCBNEW_OK', pcbnew.GetBuildVersion()); import _eeschema; print('EESCHEMA_OK'); print([x for x in dir(_eeschema) if 'SCH' in x or 'IO' in x][:120])"
+
+  ngspice-proof:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct and patch simulation decks
+        run: |
+          cat electronics/src_chunks/part000.bin electronics/src_chunks/part001a.bin electronics/src_chunks/part001b.bin electronics/src_chunks/part002.bin electronics/src_chunks/part003.bin electronics/src_chunks/part004.bin electronics/src_chunks/part005.bin > electronics/dpd_kicad_src.rebuilt.tar.gz
+          echo '166212301f4671d9662ae3038baa10a2bd0d43c5acd8b3fe1a68ec6717d2652d  electronics/dpd_kicad_src.rebuilt.tar.gz' | sha256sum -c -
+          rm -rf electronics/DPD2000_RevC && mkdir -p electronics/DPD2000_RevC
+          tar -xzf electronics/dpd_kicad_src.rebuilt.tar.gz -C electronics/DPD2000_RevC
+          cp electronics/overrides/hv_pt_cw.cir electronics/DPD2000_RevC/sim/hv_pt_cw.cir
+          cp electronics/overrides/afe_tot.cir electronics/DPD2000_RevC/sim/afe_tot.cir
+          cp electronics/overrides/pt_input_resonance.cir electronics/DPD2000_RevC/sim/pt_input_resonance.cir
+      - name: Install ngspice
+        run: sudo apt-get update && sudo apt-get install -y ngspice
+      - name: Run all SPICE decks
+        run: |
+          mkdir -p electronics/DPD2000_RevC/manufacturing/spice
+          fail=0
+          for d in hv_pt_cw.cir afe_tot.cir pt_input_resonance.cir; do
+            ngspice -b -o "electronics/DPD2000_RevC/manufacturing/spice/${d%.cir}.log" "electronics/DPD2000_RevC/sim/$d" || fail=1
+          done
+          cat electronics/DPD2000_RevC/manufacturing/spice/*.log || true
+          exit $fail
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: DPD2000-RevC-ngspice-proof
+          path: electronics/DPD2000_RevC/manufacturing/spice
+          if-no-files-found: warn
