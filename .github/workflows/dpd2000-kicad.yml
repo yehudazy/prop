@@ -22,8 +22,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: KiCad version
         run: kicad-cli version
-      - name: Generate candidate
-        run: python3 electronics/generate_kicad_revc_ci.py
+      - name: Verify and extract byte-exact source bundle
+        run: |
+          echo '166212301f4671d9662ae3038baa10a2bd0d43c5acd8b3fe1a68ec6717d2652d  electronics/dpd_kicad_src.tar.gz' | sha256sum -c -
+          mkdir -p electronics/DPD2000_RevC
+          tar -xzf electronics/dpd_kicad_src.tar.gz -C electronics/DPD2000_RevC
+          find electronics/DPD2000_RevC -maxdepth 3 -type f -print
       - name: Schematic ERC
         run: |
           mkdir -p electronics/DPD2000_RevC/manufacturing/reports
@@ -41,7 +45,7 @@ jobs:
       - name: Package
         run: |
           cd electronics/DPD2000_RevC
-          tar -czf DPD2000_RevC_KiCad10_manufacturing.tar.gz kicad docs manufacturing
+          tar -czf DPD2000_RevC_KiCad10_manufacturing.tar.gz kicad manufacturing
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -49,7 +53,6 @@ jobs:
           path: |
             electronics/DPD2000_RevC/manufacturing
             electronics/DPD2000_RevC/kicad
-            electronics/DPD2000_RevC/docs
             electronics/DPD2000_RevC/DPD2000_RevC_KiCad10_manufacturing.tar.gz
           if-no-files-found: warn
 
@@ -57,8 +60,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Generate design and simulation decks
-        run: python3 electronics/generate_kicad_revc_ci.py
+      - name: Verify and extract byte-exact source bundle
+        run: |
+          echo '166212301f4671d9662ae3038baa10a2bd0d43c5acd8b3fe1a68ec6717d2652d  electronics/dpd_kicad_src.tar.gz' | sha256sum -c -
+          mkdir -p electronics/DPD2000_RevC
+          tar -xzf electronics/dpd_kicad_src.tar.gz -C electronics/DPD2000_RevC
       - name: Install real ngspice
         run: |
           sudo apt-get update
@@ -68,9 +74,7 @@ jobs:
         run: |
           mkdir -p electronics/DPD2000_RevC/manufacturing/spice
           for d in hv_pt_cw.cir afe_tot.cir pt_input_resonance.cir; do
-            if [ -f "electronics/DPD2000_RevC/sim/$d" ]; then
-              ngspice -b -o "electronics/DPD2000_RevC/manufacturing/spice/${d%.cir}.log" "electronics/DPD2000_RevC/sim/$d"
-            fi
+            ngspice -b -o "electronics/DPD2000_RevC/manufacturing/spice/${d%.cir}.log" "electronics/DPD2000_RevC/sim/$d"
           done
       - uses: actions/upload-artifact@v4
         if: always()
